@@ -4,6 +4,7 @@ from datetime import timedelta
 from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
+from airflow.operators.dummy import DummyOperator
 
 default_args = {
     'owner': 'airflow',
@@ -34,10 +35,15 @@ def t2_func(**context):
 
 
 with dag:
-    t1 = BashOperator(
-        task_id='download_dataset',
+    # download_dataset = BashOperator(
+    #     task_id='download_dataset',
+    #     bash_command=
+    #     'kaggle competitions download {{ dag_run.conf["competition_name"]}} -p /tmp'
+    # )
+    dummy_op1 = DummyOperator(task_id='dummy_operator')
+    extract_dataset = BashOperator(
+        task_id='extract_dataset',
         bash_command=
-        'kaggle competitions download {{ dag_run.conf["competition_name"]}} -p /tmp'
+        'mkdir -p /tmp/{{ dag_run.conf["competition_name"]}} && unzip /tmp/{{dag_run.conf["competition_name"]}}.zip -d /tmp/{{ dag_run.conf["competition_name"]}}'
     )
-    t2 = PythonOperator(task_id='task2', python_callable=t2_func)
-    t1 >> t2
+    dummy_op1 >> extract_dataset
