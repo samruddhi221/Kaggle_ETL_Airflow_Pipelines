@@ -5,6 +5,10 @@ from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.operators.dummy import DummyOperator
+from kaggle_etl import dataloader_factory
+from kaggle_etl.dataloader_factory import DataloaderFactory
+
+import os
 
 default_args = {
     'owner': 'airflow',
@@ -30,8 +34,15 @@ dag = DAG('nlp-etl',
 dag.params = default_config
 
 
-def t2_func(**context):
-    print("this is task-2.")
+def dataloader_helper(competition_name):
+    dataloader_fn = DataloaderFactory(competition_name).get_loader()
+    out_dicts = dataloader_fn(os.path.join('/tmp', competition_name))
+    out_dicts['train'].to_pickle(
+        os.path.join('/tmp', competition_name, 'train.pkl'))
+    out_dicts['validation'].to_pickle(
+        os.path.join('/tmp', competition_name, 'validation.pkl'))
+    out_dicts['test'].to_pickle(
+        os.path.join('/tmp', competition_name, 'test.pkl'))
 
 
 with dag:
@@ -41,9 +52,13 @@ with dag:
     #     'kaggle competitions download {{ dag_run.conf["competition_name"]}} -p /tmp'
     # )
     dummy_op1 = DummyOperator(task_id='dummy_operator')
-    extract_dataset = BashOperator(
-        task_id='extract_dataset',
-        bash_command=
-        'mkdir -p /tmp/{{ dag_run.conf["competition_name"]}} && unzip /tmp/{{dag_run.conf["competition_name"]}}.zip -d /tmp/{{ dag_run.conf["competition_name"]}}'
-    )
-    dummy_op1 >> extract_dataset
+    # extract_dataset = BashOperator(
+    #     task_id='extract_dataset',
+    #     bash_command=
+    #     'mkdir -p /tmp/{{ dag_run.conf["competition_name"]}} && unzip /tmp/{{dag_run.conf["competition_name"]}}.zip -d /tmp/{{ dag_run.conf["competition_name"]}}'
+    # )
+    create_df = PythonOperator(
+        task_id='create_dataframes',
+        python_callable=dataloader_helper,
+        op_args=['{{dag_run.conf["competition_name"]}}'])
+    dummy_op1 >> create_df
